@@ -1,5 +1,12 @@
+import 'dart:convert';
+
+import 'package:driver/constants/api_constants.dart';
 import 'package:driver/sections/appBar.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:another_flushbar/flushbar.dart';
+
 
 class ChangePassword extends StatefulWidget {
   const ChangePassword({super.key});
@@ -10,6 +17,11 @@ class ChangePassword extends StatefulWidget {
 
 class _ChangePasswordState extends State<ChangePassword> {
   var _formStateKey = GlobalKey<FormState>();
+  bool isButtonDisabled = false;
+  var driverData;
+  var token;
+  var setup;
+
   bool _showOldPassword = false, _showNewPassword = false, _showNew2Password = false;
   Credential _credential = Credential();
   var _oldPassword = "", _newPassword = "", _new2Password = "";
@@ -49,11 +61,75 @@ class _ChangePasswordState extends State<ChangePassword> {
     return null;
   }
 
-  void change(){
+  Flushbar successFlushBar(){
+    return Flushbar(
+      message: "Password Changed Successfully!",
+      backgroundColor: Colors.green,
+      duration: Duration(seconds: 3),
+      flushbarPosition: FlushbarPosition.TOP,
+    );
+  }
+
+  Flushbar failureFlushBar(){
+    return Flushbar(
+      message: "oops, error while changing password",
+      backgroundColor: Colors.red,
+      duration: Duration(seconds: 3),
+      flushbarPosition: FlushbarPosition.TOP,
+    );
+  }
+
+  void change() async{
     if (_formStateKey.currentState!.validate()){
       _formStateKey.currentState!.save();
-      print("Correct");
+
+      var changeResponse = await http.post(
+        Uri.parse("$BASE_URL/driver/changepassword"),
+        headers: {
+          "Authorization" : "Bearer $token",
+          'Content-Type': 'application/json'
+        },
+        body: jsonEncode({
+          "old_password" : _oldPassword,
+          "new_password" : _newPassword,
+          "confirm_password" : _new2Password
+        }),
+      );
+
+      if (changeResponse.statusCode == 200){
+        isButtonDisabled = true;
+        successFlushBar().show(context).then( (value) => Navigator.pushReplacementNamed(context, "/signin"));
+      }
+      else{
+        failureFlushBar().show(context);
+        setState(
+          (){
+            isButtonDisabled = false;
+          }
+        );
+        
+      }
+      // print(changeResponse.statusCode);
+      // print(changeResponse.body);
     }
+  }
+
+  void initState(){
+    super.initState();
+    initAsync();
+  }
+
+  void initAsync() async{
+    var prefs = await SharedPreferences.getInstance();
+    var driverJSON = jsonDecode(prefs.getString("driver_data")!);
+    var tokenString = prefs.getString("access_token");
+    setState(() {
+      driverData = driverJSON;
+      token = tokenString;
+      setup = true;
+    });
+
+    // print(token);
   }
 
   TextFormField formField(String type, bool showStatus, Function validator){
@@ -98,33 +174,38 @@ class _ChangePasswordState extends State<ChangePassword> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: driverAppBar("Change Password"),
-      body: Padding(
-        padding: EdgeInsets.all(80.0),
-        child: Form(
-          key: _formStateKey,
-          autovalidateMode: AutovalidateMode.onUnfocus,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              formField("O", _showOldPassword, _validatePassword),
-              SizedBox(height: 8.0),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(), // dismiss keyboard when tapping outside
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(24.0), // smaller, more adaptive padding
+          reverse: true, // ensures view scrolls up when keyboard appears
+          child: Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            child: Form(
+              key: _formStateKey,
+              autovalidateMode: AutovalidateMode.onUnfocus,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  formField("O", _showOldPassword, _validatePassword),
+                  SizedBox(height: 16.0),
 
-              formField("N", _showNewPassword, _validatePassword),
-              SizedBox(height: 8.0),
+                  formField("N", _showNewPassword, _validatePassword),
+                  SizedBox(height: 16.0),
 
-              formField("2", _showNew2Password, _validateConfirmPassword),
-              SizedBox(height: 8.0),
+                  formField("2", _showNew2Password, _validateConfirmPassword),
+                  SizedBox(height: 24.0),
 
-              ElevatedButton(
-                onPressed: (){
-                  change();
-                }, 
-                child: Text("Change Password"),
-              )
-            ],
-          )
-        )
-      )
+                  ElevatedButton(
+                    onPressed: isButtonDisabled ? null : change,
+                    child: Text("Change Password"),
+                  )
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
