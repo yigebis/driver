@@ -1,7 +1,12 @@
 import 'dart:convert';
+import 'dart:ui' as html;
 
+import 'package:driver/constants/api_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+// import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 
 
 class Signin extends StatefulWidget {
@@ -57,27 +62,39 @@ class _SigninState extends State<Signin> {
   void signIn() async{
     if (_formStateKey.currentState!.validate()){
       _formStateKey.currentState!.save();
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   SnackBar(
-      //     content: Text("Email: ${_credential._email} ] \nPassword: ${_credential._password}" )
-      //   )
-      // );
-
-      // Navigator.pushNamed(context, "/dashboard");
 
       var response = await http.post(
-        Uri.parse('http://localhost:8080/driver/login'),
+        Uri.parse('https://hawir-rv5k.onrender.com/driver/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          "email" : _credential._email,
-          "password": _credential._password
+          "email" : _credential._email.trim(),
+          "password": _credential._password.trim()
         }),
       );
 
-      print(response.body);
+      // final storage = FlutterSecureStorage();
+      Map<String, dynamic> data = jsonDecode(response.body);
+
       print(response.statusCode);
+      if (response.statusCode == 200){
+        var accessToken = data["token"];
+        var driverData = data["driver"];
+        // print(driverData);
+        // await storage.write(key: "access_token", value: accessToken);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('access_token', accessToken);
+        await prefs.setString("driver_data", jsonEncode(driverData));
+        Navigator.pushNamed(context, "/main");
+      }
+      else{
+        var errorMessage = data["error"];
 
-
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+          )
+        );
+      }
     }
   }
 
@@ -138,5 +155,5 @@ class Credential{
   late String _email;
   late String _password;
 
-  Credential(){}
+  Credential();
 }

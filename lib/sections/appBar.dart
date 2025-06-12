@@ -5,5 +5,6 @@ AppBar driverAppBar(String title){
     title: Text(title),
     centerTitle: true,
     backgroundColor: const Color.fromARGB(255, 74, 235, 80),
+    automaticallyImplyLeading: false,
   );
 }
